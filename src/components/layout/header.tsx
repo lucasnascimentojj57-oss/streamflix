@@ -109,7 +109,10 @@ export function Header({ region }: { region: RegionCode }) {
           >
             <Bookmark aria-hidden="true" className="size-[1.1rem]" />
             <span className="sr-only">
-              Minha lista{count > 0 ? `, ${count} títulos salvos` : ", vazia"}
+              Minha lista
+              {count > 0
+                ? `, ${count} ${count === 1 ? "título salvo" : "títulos salvos"}`
+                : ", vazia"}
             </span>
             {count > 0 && (
               <span
