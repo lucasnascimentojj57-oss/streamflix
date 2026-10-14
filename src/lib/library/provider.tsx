@@ -10,14 +10,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { MediaItem, MediaRef } from "@/lib/tmdb/types";
-import {
-  clearLocalLibrary,
-  LocalBackend,
-  readLibrary,
-} from "./local-backend";
 import { SupabaseBackend } from "./supabase-backend";
 import {
   dedupe,
@@ -30,21 +26,16 @@ import {
 /**
  * Estado da biblioteca pessoal do app.
  *
- * Arquitetura: um único provider no topo da árvore mantém a lista em
- * memória e delega a persistência a um `LibraryBackend`. A UI nunca fala
- * com o Supabase nem com o localStorage — só com este contexto.
- *
- * Dois status mutuamente exclusivos: `want` (quero assistir) e `watched`
- * (já assisti). Definir um remove o outro automaticamente.
+ * A biblioteca **exige conta**: todas as mutações passam por `requireBackend`,
+ * que redireciona para /entrar com `?next=` quando não há sessão. Abrimos mão
+ * do "funciona sem login" em troca de uma garantia simples e honesta: o que o
+ * usuário vê na tela é exatamente o que está na conta dele.
  *
  * Por que estado em memória em vez de ler do backend a cada render?
- * Porque a UI precisa ser INSTANTÂNEA. Clicar em "quero assistir" deve
- * mudar o ícone no mesmo frame, não depois de um round-trip. Aplicamos a
- * mudança localmente (otimista) e persistimos em seguida; se falhar,
- * revertemos.
+ * Porque a UI precisa ser INSTANTÂNEA. Clicar em "quero assistir" deve mudar
+ * o ícone no mesmo frame, não depois de um round-trip. Aplicamos a mudança
+ * localmente (otimista) e persistimos em seguida; se falhar, revertemos.
  */
-
-type StorageKind = "local" | "cloud";
 
 interface LibraryContextValue {
   /** Tudo, mais recentes primeiro. */
@@ -56,8 +47,6 @@ interface LibraryContextValue {
   counts: { want: number; watched: number; total: number };
   /** `true` enquanto a lista inicial está sendo carregada. */
   loading: boolean;
-  /** Onde os dados estão agora — a UI usa para informar o usuário. */
-  storage: StorageKind;
   user: User | null;
   /** Status atual de um título, ou `null` se ele não está na biblioteca. */
   statusOf: (ref: MediaRef) => LibraryStatus | null;
@@ -76,32 +65,52 @@ interface LibraryContextValue {
 
 const LibraryContext = createContext<LibraryContextValue | null>(null);
 
-export function LibraryProvider({ children }: { children: ReactNode }) {
+export function LibraryProvider({
+  children,
+  serverUserId,
+}: {
+  children: ReactNode;
+  /**
+   * Id do usuário segundo o SERVIDOR (lido do cookie no layout raiz).
+   * `null` quando não há sessão.
+   *
+   * Existe para resolver um problema concreto: entrar e sair acontecem em
+   * Server Actions, que gravam o cookie na resposta e redirecionam. O
+   * cliente do browser (onde este provider vive) não é avisado —
+   * `onAuthStateChange` só dispara para mudanças feitas pelo próprio
+   * cliente. Sem este sinal, quem entrava vindo de `/entrar` continuava
+   * vendo "Entre para ver..." até dar reload, e quem saía continuava
+   * parecendo logado.
+   *
+   * Como o layout raiz re-renderiza a cada navegação, este valor é o
+   * gatilho confiável para reconciliar a sessão — em qualquer rota, tanto
+   * no login quanto no logout.
+   */
+  serverUserId: string | null;
+}) {
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [storage, setStorage] = useState<StorageKind>("local");
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const router = useRouter();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
   /**
-   * Backend ativo. Fica em ref (não em state) porque as callbacks de
-   * setStatus/remove precisam ler o valor atual sem serem recriadas a cada
-   * troca de backend — recriá-las causaria re-render de todos os cards.
+   * Backend ativo, em ref.
    *
-   * O `kind` é espelhado em state (`storage`) porque a UI precisa dele
-   * durante o render, e ler refs durante o render é proibido.
+   * Fica em ref (não em state) porque as callbacks de setStatus/remove
+   * precisam ler o valor atual sem serem recriadas a cada login — recriá-las
+   * causaria re-render de todos os cards. Fica `null` quando não há sessão.
    */
-  const backendRef = useRef<LibraryBackend>(new LocalBackend());
+  const backendRef = useRef<LibraryBackend | null>(null);
 
   /**
    * Último usuário conhecido, em ref.
    *
    * Os listeners de auth precisam comparar "mudou mesmo de usuário?" sem
-   * serem recriados a cada login (o que re-subscreveria os listeners). Ler
-   * o estado `user` dentro deles exigiria incluí-lo nas dependências do
-   * efeito — daí a ref, que sempre enxerga o valor atual.
+   * serem recriados a cada login. Ler o estado `user` dentro deles exigiria
+   * incluí-lo nas dependências do efeito — daí a ref.
    */
   const userRef = useRef<User | null>(null);
   useEffect(() => {
@@ -112,54 +121,63 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const loadIdRef = useRef(0);
 
   /**
-   * Sincroniza a lista com o backend adequado ao usuário.
+   * Garante que há sessão antes de qualquer mutação.
+   *
+   * Sem sessão, manda para o login preservando o destino (`?next=`), para o
+   * usuário voltar exatamente onde estava. Devolve o backend, ou `null` se
+   * não havia sessão — nesse caso o fluxo foi interrompido e nada é salvo.
+   */
+  const requireBackend = useCallback((): LibraryBackend | null => {
+    if (!backendRef.current) {
+      const next =
+        typeof window !== "undefined"
+          ? window.location.pathname + window.location.search
+          : "/";
+      router.push(`/entrar?next=${encodeURIComponent(next)}`);
+      return null;
+    }
+
+    return backendRef.current;
+  }, [router]);
+
+  /**
+   * Sincroniza a lista com o backend do usuário.
    *
    * Nota de implementação: todos os `setState` acontecem DEPOIS de um
    * `await`. Isso não é acidental — atualizar estado de forma síncrona
    * dentro de um efeito provoca render em cascata (e é o que a regra
-   * `react-hooks/set-state-in-effect` sinaliza). Como a leitura do
-   * backend é assíncrona de qualquer forma, a espera é natural.
+   * `react-hooks/set-state-in-effect` sinaliza).
    */
   const sync = useCallback(
     async (nextUser: User | null, isActive: () => boolean) => {
       const loadId = ++loadIdRef.current;
 
-      const backend: LibraryBackend =
-        nextUser && supabase
-          ? new SupabaseBackend(supabase, nextUser.id)
-          : new LocalBackend();
+      // Sem usuário (ou sem Supabase configurado) não há biblioteca: fica
+      // vazia e somente leitura. O backend continua `null`, então qualquer
+      // tentativa de escrita leva ao login.
+      if (!nextUser || !supabase) {
+        backendRef.current = null;
 
+        // `await` antes dos setState: ver nota acima sobre render em cascata.
+        await Promise.resolve();
+        if (!isActive() || loadId !== loadIdRef.current) return;
+
+        setEntries([]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      const backend = new SupabaseBackend(supabase, nextUser.id);
       backendRef.current = backend;
 
       try {
-        let remote = await backend.list();
-
-        // ── Migração: usuário logou e tinha biblioteca local ──
-        if (nextUser && backend.kind === "cloud") {
-          const local = readLibrary();
-
-          if (local.length > 0) {
-            const remoteKeys = new Set(remote.map(libraryKey));
-            const missing = local.filter(
-              (entry) => !remoteKeys.has(libraryKey(entry)),
-            );
-
-            if (missing.length > 0) {
-              await backend.addMany(missing);
-              remote = dedupe([...missing, ...remote]);
-            }
-
-            // Migração concluída: limpa o local para não migrar de novo
-            // nem duplicar caso o usuário saia e entre novamente.
-            clearLocalLibrary();
-          }
-        }
+        const remote = await backend.list();
 
         // Descarta resultado obsoleto (usuário trocou de conta no meio).
         if (!isActive() || loadId !== loadIdRef.current) return;
 
-        setStorage(backend.kind);
-        setEntries(remote);
+        setEntries(dedupe(remote));
         setError(null);
       } catch (cause) {
         if (!isActive() || loadId !== loadIdRef.current) return;
@@ -188,9 +206,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
      *
      * `settle` é `true` quando o valor é definitivo (início, login/logout,
      * foco). Nesse caso marcamos `loading` para a lista não piscar vazia
-     * enquanto o backend responde. O listener de auth pode emitir o MESMO
-     * usuário logo após o `init`; aí `settle = false` evita um `loading`
-     * desnecessário (e o flicker que ele causaria).
+     * enquanto o backend responde.
      */
     const applyUser = (nextUser: User | null, settle: boolean) => {
       if (settle) {
@@ -200,15 +216,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       void sync(nextUser, isActive);
     };
 
-    /**
-     * Um único caminho assíncrono para os dois modos.
-     *
-     * Manter o modo local dentro de uma função assíncrona não é
-     * preciosismo: garante que os `setState` sempre aconteçam após um
-     * `await`, evitando render em cascata. Também evita dois fluxos
-     * divergentes — o modo local seria o menos exercitado e esconderia
-     * bugs que só apareceriam em produção com Supabase.
-     */
     const init = async () => {
       if (!supabase) {
         await sync(null, isActive);
@@ -218,9 +225,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.auth.getUser();
       if (!active) return;
 
-      // Aqui o usuário JÁ é conhecido de forma definitiva: refletimos no
-      // estado antes de sincronizar (sem isso, o header ficaria "Entrar"
-      // até a lista carregar).
       setUser(data.user ?? null);
       setLoading(true);
       await sync(data.user ?? null, isActive);
@@ -259,10 +263,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     /**
      * Revalida a sessão quando a aba volta ao foco.
      *
-     * Caso de uso concreto: o usuário entra ou cria conta em outra aba (ou
-     * numa janela diferente) e volta para esta — o header atualiza sozinho,
-     * sem reload. É barato: `getUser()` lê a sessão local e só bate no
-     * servidor se o token precisar ser validado.
+     * Caso de uso concreto: o usuário entra em outra aba e volta para esta —
+     * o header e a lista atualizam sozinhos, sem reload.
      */
     const onFocus = () => {
       void supabase.auth.getUser().then(({ data }) => {
@@ -282,6 +284,38 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     };
   }, [supabase, sync]);
 
+  /**
+   * Revalida a sessão quando o servidor vê uma sessão diferente.
+   *
+   * O valor do servidor é só o GATILHO; quem decide é o cliente, que lê o
+   * mesmo cookie e é quem de fato usa a biblioteca. Assim cobrimos login,
+   * cadastro e logout em qualquer rota, sem depender de reload.
+   *
+   * A conferência é barata: `getUser()` resolve do cookie local. Não usamos
+   * `pathname` como gatilho porque sair da conta na própria home manteria a
+   * rota igual — e o header continuaria mostrando a conta antiga.
+   */
+  useEffect(() => {
+    if (!supabase) return;
+
+    let active = true;
+
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!active) return;
+
+      const nextUser = data.user ?? null;
+      if ((userRef.current?.id ?? null) === (nextUser?.id ?? null)) return;
+
+      setUser(nextUser);
+      setLoading(true);
+      void sync(nextUser, () => active);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [supabase, sync, serverUserId]);
+
   /* ─────────────────── Mutações otimistas ─────────────────── */
 
   /**
@@ -292,8 +326,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const runOptimistic = useCallback(
     (
       apply: (current: LibraryEntry[]) => LibraryEntry[],
-      persist: () => Promise<void>,
+      persist: (backend: LibraryBackend) => Promise<void>,
     ) => {
+      const backend = requireBackend();
+      if (!backend) return; // sem sessão: já redirecionou para o login
+
       let snapshot: LibraryEntry[] = [];
 
       setEntries((current) => {
@@ -301,7 +338,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         return apply(current);
       });
 
-      void persist().catch((cause: unknown) => {
+      void persist(backend).catch((cause: unknown) => {
         setEntries(snapshot);
         setError(
           cause instanceof Error
@@ -310,7 +347,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         );
       });
     },
-    [],
+    [requireBackend],
   );
 
   const setStatus = useCallback(
@@ -324,7 +361,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
           { ...item, status, updatedAt: new Date().toISOString() },
           ...current.filter((entry) => libraryKey(entry) !== key),
         ],
-        () => backendRef.current.setStatus(item, status),
+        (backend) => backend.setStatus(item, status),
       );
     },
     [runOptimistic],
@@ -336,7 +373,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
       runOptimistic(
         (current) => current.filter((entry) => libraryKey(entry) !== key),
-        () => backendRef.current.remove(ref),
+        (backend) => backend.remove(ref),
       );
     },
     [runOptimistic],
@@ -359,7 +396,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const clear = useCallback(() => {
     runOptimistic(
       () => [],
-      () => backendRef.current.clear(),
+      (backend) => backend.clear(),
     );
   }, [runOptimistic]);
 
@@ -367,7 +404,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     (status: LibraryStatus) => {
       runOptimistic(
         (current) => current.filter((entry) => entry.status !== status),
-        () => backendRef.current.clearStatus(status),
+        (backend) => backend.clearStatus(status),
       );
     },
     [runOptimistic],
@@ -398,7 +435,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   );
 
   const counts = useMemo(
-    () => ({ want: want.length, watched: watched.length, total: entries.length }),
+    () => ({
+      want: want.length,
+      watched: watched.length,
+      total: entries.length,
+    }),
     [want.length, watched.length, entries.length],
   );
 
@@ -411,7 +452,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       watched,
       counts,
       loading,
-      storage,
       user,
       statusOf,
       setStatus,
@@ -428,7 +468,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       watched,
       counts,
       loading,
-      storage,
       user,
       statusOf,
       setStatus,

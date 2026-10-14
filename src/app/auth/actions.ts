@@ -30,6 +30,17 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 /** Mínimo aceito pelo Supabase, replicado aqui para mensagem antecipada. */
 const MIN_PASSWORD = 6;
 
+/**
+ * Normaliza o destino pós-login.
+ *
+ * Só aceitamos caminhos relativos — um `next` absoluto seria um open
+ * redirect: o atacante usaria nosso domínio para levar o usuário a um site
+ * malicioso logo depois do login, quando ele está mais confiante.
+ */
+function safeNext(raw: string): string {
+  return raw.startsWith("/") && !raw.startsWith("//") ? raw : "/minha-lista";
+}
+
 /** Origin confiável, derivado dos headers (nunca do cliente). */
 async function getOrigin() {
   const headerList = await headers();
@@ -108,9 +119,7 @@ export async function signIn(
   }
 
   revalidatePath("/", "layout");
-  // Só aceitamos caminhos relativos — um `next` absoluto seria open redirect.
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/minha-lista";
-  redirect(safeNext);
+  redirect(safeNext(next));
 }
 
 /* ───────────────────────── Criar conta ───────────────────────── */
@@ -122,6 +131,7 @@ export async function signUp(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
+  const next = String(formData.get("next") ?? "/minha-lista");
 
   if (!email)
     return { status: "error", message: "Informe seu e-mail.", field: "email" };
@@ -155,7 +165,10 @@ export async function signUp(
     password,
     options: {
       // Só é usado se a confirmação por e-mail estiver ativada no painel.
-      emailRedirectTo: `${origin}/auth/callback`,
+      // Levamos o destino adiante para o usuário voltar ao ponto de partida.
+      emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(
+        safeNext(next),
+      )}`,
     },
   });
 
@@ -167,7 +180,7 @@ export async function signUp(
   // devolve sessão — o usuário entra direto.
   if (data.session) {
     revalidatePath("/", "layout");
-    redirect("/minha-lista");
+    redirect(safeNext(next));
   }
 
   // Sem sessão ⇒ confirmação por e-mail está ativada. Avisamos o usuário.

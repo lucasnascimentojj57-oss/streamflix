@@ -58,10 +58,11 @@ npm run dev
 
 Abra **http://localhost:3000**.
 
-### 4. (Opcional) Sincronizar listas com o Supabase
+### 4. Configurar o Supabase
 
-Sem configuração extra, suas listas ficam no `localStorage` e o app funciona
-normalmente. Para sincronizar entre dispositivos:
+As **listas pessoais exigem conta** — sem Supabase configurado, o catálogo
+funciona normalmente mas as áreas de lista mostram um aviso explicando como
+configurar. Para ativar login e sincronização:
 
 1. Crie um projeto em **https://supabase.com/dashboard** (o plano gratuito basta).
 2. No **SQL Editor**, cole o conteúdo de [`supabase/schema.sql`](supabase/schema.sql)
@@ -85,9 +86,6 @@ O login é por **e-mail e senha**, com cadastro e recuperação de senha.
 > **Authentication → Sign In / Providers → Email**, desligue *Confirm email*.
 > Assim o cadastro entra direto. Se preferir manter ligada, o app já trata o
 > fluxo de confirmação por link.
-
-Ao entrar pela primeira vez, o que você já tinha salvo no navegador é migrado
-automaticamente para a conta.
 
 > 🔒 A `anon key` é **pública por design** — ela vai no bundle do browser e não
 > é um segredo. A proteção real vem das políticas de **Row Level Security** no
@@ -120,7 +118,7 @@ e zero chance de UI dessincronizada.
 |---|---|
 | `src/lib/tmdb/` | Cliente HTTP, endpoints, normalização, URLs de imagem, curadoria de providers |
 | `src/lib/` (region*) | Região ativa em cookie (BR/PT) — isomórfico + leitura no servidor |
-| `src/lib/library/` | Listas do usuário (quero assistir / já assisti) atrás de uma interface trocável |
+| `src/lib/library/` | Listas do usuário (quero assistir / já assisti) — exigem conta |
 | `src/lib/supabase/` | Clientes browser/SSR e renovação de sessão |
 | `src/components/ui/` | Primitivos do design system |
 | `src/components/media/` | Card, grid, trilha, hero, providers, trailer, abas, botões de status |
@@ -149,10 +147,17 @@ resolve, em vez de esperar a requisição mais lenta.
 
 **Dois status, um contrato.** Cada título tem um status: **quero assistir**
 (`want`) ou **já assisti** (`watched`), mutuamente exclusivos. `LibraryBackend`
-é o contrato, com `LocalBackend` (localStorage) e `SupabaseBackend` (tabela
-`favorites` com RLS). O `LibraryProvider` escolhe a implementação conforme o
-usuário estar autenticado. Nenhum componente de UI conhece `localStorage` nem
-o SDK do Supabase — só o contexto.
+é o contrato e `SupabaseBackend` a implementação (tabela `favorites` com RLS).
+Nenhum componente de UI conhece o SDK do Supabase — só o contexto.
+
+**A lista exige conta.** Marcar ou tirar um título da lista sem sessão leva o
+usuário para o login, com `?next=` de volta ao ponto de partida. Em troca de
+abrir mão do "funciona sem login", ganhamos uma garantia simples: o que está na
+tela é exatamente o que está na conta. Antes havia um `LocalBackend` em
+`localStorage`; foi removido para não manter dois caminhos de código nem deixar
+o usuário com a impressão de ter listas salvas na conta quando elas viviam só
+naquele navegador. Por consistência com essa regra, `provider.tsx` e
+`library-view.tsx` só dependem de `backend` — sem ramos de "modo local".
 
 **Abas na URL, região no cookie.** As abas da home (`?aba=inicio|quero|assistidos`)
 são lidas por um componente client, não por `searchParams` no servidor — assim o
@@ -166,11 +171,6 @@ fixa no código: vem de `/watch/providers/{movie,tv}` e é filtrada por região
 BR; RTP Play só em PT) e no tempo — a lista fixa anterior tinha **IDs errados**
 (554 era BroadwayHD, não Telecine; 2242 e 619 nem existem). Curadoria = filtro,
 não digitação de nomes.
-
-**Migração automática na primeira entrada.** Quem salvava títulos sem conta
-não perde nada: ao entrar pela primeira vez, os títulos locais são copiados
-para a nuvem (deduplicados) e apagados do navegador, para não migrar de novo
-nem duplicar em logins futuros.
 
 **Listas otimistas.** Clicar em "quero assistir" ou "já assisti" muda a UI no
 mesmo frame e só depois persiste. Se a escrita falhar, o estado é revertido e
@@ -253,9 +253,8 @@ src/
 │   ├── use-region.ts           # hook do seletor (grava o cookie)
 │   ├── library/
 │   │   ├── types.ts            # contrato LibraryBackend + status + helpers
-│   │   ├── local-backend.ts    # LocalBackend (localStorage, migra v1 → v2)
 │   │   ├── supabase-backend.ts # SupabaseBackend (tabela favorites + status)
-│   │   └── provider.tsx        # LibraryProvider: sessão, migração, otimismo
+│   │   └── provider.tsx        # LibraryProvider: sessão, exigência de login, otimismo
 │   ├── supabase/
 │   │   ├── client.ts           # cliente browser (singleton)
 │   │   ├── server.ts           # cliente SSR + getServerUser()

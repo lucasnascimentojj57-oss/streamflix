@@ -19,17 +19,17 @@ export function AuthNotConfigured() {
 
       <p className="mt-3 text-sm leading-relaxed text-paper-dim">
         Este projeto está rodando sem Supabase, então não é possível criar
-        conta ou entrar. Suas listas continuam funcionando — ficam salvas
-        apenas neste navegador. Para ativar o login, configure as variáveis
-        de ambiente descritas no{" "}
-        <strong className="text-paper">README.md</strong>.
+        conta ou entrar — e as listas pessoais dependem de uma conta. Para
+        ativar o login, configure as variáveis de ambiente descritas no{" "}
+        <strong className="text-paper">README.md</strong>. Enquanto isso, você
+        pode continuar explorando o catálogo.
       </p>
 
       <Link
-        href="/minha-lista"
+        href="/descobrir"
         className="mt-6 inline-block text-sm text-terra underline underline-offset-4 hover:text-terra-soft"
       >
-        Ver minha lista
+        Explorar o catálogo
       </Link>
     </div>
   );

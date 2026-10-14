@@ -102,7 +102,11 @@ export function SignInForm({ configured, initialError, next }: SignInFormProps) 
       <p className="mt-5 text-center text-xs text-paper-dim">
         Ainda não tem conta?{" "}
         <Link
-          href="/criar-conta"
+          href={
+            next
+              ? `/criar-conta?next=${encodeURIComponent(next)}`
+              : "/criar-conta"
+          }
           className="text-terra underline underline-offset-4 hover:text-terra-soft"
         >
           Criar conta

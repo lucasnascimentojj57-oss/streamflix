@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Cloud, HardDrive, LogOut, UserRound } from "lucide-react";
+import { Cloud, LogOut, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { signOut } from "@/app/auth/actions";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  * Menu de conta no header.
  *
  * Três estados:
- *  1. Supabase não configurado → nada é renderizado (o app é local puro).
+ *  1. Supabase não configurado → nada é renderizado (não há como logar).
  *  2. Deslogado → link "Entrar".
  *  3. Logado → avatar com menu (e-mail + sair).
  *
@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
  * que exigiria navegação por setas para ser correto.
  */
 export function AccountMenu() {
-  const { user, storage } = useLibrary();
+  const { user } = useLibrary();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -53,15 +53,11 @@ export function AccountMenu() {
     };
   }, [open]);
 
-  // Sem Supabase configurado, não há o que mostrar.
-  //
-  // Nota importante: usamos `isSupabaseConfigured()` (que lê as variáveis
-  // NEXT_PUBLIC_*, substituídas em tempo de build e idênticas no servidor e
-  // no cliente) em vez de `typeof window !== "undefined"`. Este último é
-  // `false` no servidor e `true` no cliente, então o HTML do servidor (sem
-  // o botão) divergiria do primeiro render do cliente (com o botão) —
-  // exatamente a causa de um erro de hidratação.
-  if (storage === "local" && !user && !isSupabaseConfigured()) return null;
+  // Sem Supabase configurado não há como logar, então nem mostramos o
+  // gatilho. Usamos `isSupabaseConfigured()` (que lê variáveis NEXT_PUBLIC_*,
+  // idênticas no servidor e no cliente) em vez de `typeof window`, que
+  // divergiria entre os dois e causaria erro de hidratação.
+  if (!isSupabaseConfigured()) return null;
 
   if (!user) {
     return (
@@ -129,28 +125,5 @@ export function AccountMenu() {
         </div>
       )}
     </div>
-  );
-}
-
-/** Indicador de onde a lista está salva. */
-export function StorageBadge({ className }: { className?: string }) {
-  const { storage } = useLibrary();
-
-  const isCloud = storage === "cloud";
-
-  return (
-    <span
-      className={cn(
-        "label inline-flex items-center gap-1.5 text-paper-mute",
-        className,
-      )}
-    >
-      {isCloud ? (
-        <Cloud aria-hidden="true" className="size-3 text-terra" />
-      ) : (
-        <HardDrive aria-hidden="true" className="size-3" />
-      )}
-      {isCloud ? "Sincronizado" : "Neste navegador"}
-    </span>
   );
 }

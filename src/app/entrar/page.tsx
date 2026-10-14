@@ -39,17 +39,21 @@ export default async function SignInPage({
     <AuthLayout
       eyebrow="Sua conta"
       title="Leve suas listas com você"
-      description="Sem conta, tudo fica salvo apenas neste navegador. Entrando, o que você marcou como quero assistir e já assisti acompanha você em qualquer dispositivo — e o que já está aqui é migrado automaticamente."
+      description="Entre para guardar o que você quer assistir e marcar o que já assistiu. Suas listas ficam salvas na sua conta e acompanham você em qualquer dispositivo — nada se perde ao trocar de navegador ou de aparelho."
       bullets={[
         "Acesso por e-mail e senha",
-        "Suas listas atuais são preservadas",
+        "Suas listas sincronizadas em todos os dispositivos",
         "Você pode sair quando quiser, sem perder nada",
       ]}
       footer={
         <>
           Ainda não tem conta?{" "}
           <Link
-            href="/criar-conta"
+            href={
+              params.next
+                ? `/criar-conta?next=${encodeURIComponent(params.next)}`
+                : "/criar-conta"
+            }
             className="text-terra underline underline-offset-4 hover:text-terra-soft"
           >
             Criar conta

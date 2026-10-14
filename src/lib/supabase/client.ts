@@ -7,10 +7,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Usa a anon key, que é pública por design — a segurança real vem das
  * políticas de Row Level Security no Postgres (ver supabase/schema.sql).
  *
- * `isSupabaseConfigured()` permite que o app funcione sem Supabase:
- * sem as variáveis, as listas ficam no localStorage e nenhuma tela
- * de login aparece. Isso mantém o projeto rodável para quem clona o
- * repositório sem querer criar uma conta no Supabase.
+ * `isSupabaseConfigured()` permite que o app rode sem Supabase — mas
+ * nesse caso as áreas que exigem conta mostram um aviso explicando como
+ * configurar, em vez de telas de login que falhariam em silêncio. A
+ * biblioteca depende do login, então sem Supabase ela fica indisponível.
  */
 
 export const isSupabaseConfigured = () =>

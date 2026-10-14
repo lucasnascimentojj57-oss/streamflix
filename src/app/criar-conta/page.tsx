@@ -13,25 +13,42 @@ export const metadata: Metadata = {
 };
 
 /** Página de criação de conta (e-mail + senha). */
-export default async function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const params = await searchParams;
+
   const user = await getServerUser();
-  if (user) redirect("/minha-lista");
+  if (user) {
+    // Mesma sanitizacão do login: só caminhos relativos são aceitos.
+    redirect(
+      params.next?.startsWith("/") && !params.next.startsWith("//")
+        ? params.next
+        : "/minha-lista",
+    );
+  }
 
   return (
     <AuthLayout
       eyebrow="Comece agora"
       title="Crie sua conta"
-      description="Com uma conta, tudo o que você marcar como quero assistir ou já assisti fica salvo na nuvem e disponível em qualquer aparelho. O que você já tem neste navegador é migrado na hora."
+      description="Com uma conta, tudo o que você marcar como quero assistir ou já assisti fica salvo na sua conta e disponível em qualquer aparelho."
       bullets={[
         "Basta um e-mail e uma senha",
-        "Suas listas atuais sobem automaticamente",
+        "Suas listas em todos os dispositivos",
         "Sem anúncios e sem compartilhar dados com terceiros",
       ]}
       footer={
         <>
           Já tem conta?{" "}
           <Link
-            href="/entrar"
+            href={
+              params.next
+                ? `/entrar?next=${encodeURIComponent(params.next)}`
+                : "/entrar"
+            }
             className="text-terra underline underline-offset-4 hover:text-terra-soft"
           >
             Entrar
@@ -39,7 +56,7 @@ export default async function SignUpPage() {
         </>
       }
     >
-      <SignUpForm configured={isSupabaseConfigured()} />
+      <SignUpForm configured={isSupabaseConfigured()} next={params.next} />
     </AuthLayout>
   );
 }

@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, Check, Eye, HardDrive, Cloud, Trash2, TriangleAlert, X } from "lucide-react";
+import {
+  Bookmark,
+  Check,
+  Cloud,
+  Trash2,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { useLibrary } from "@/lib/library/provider";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,53 +18,39 @@ import { MediaGrid } from "./media-grid";
 /**
  * Lista da biblioteca de um status ("quero assistir" ou "já assisti").
  *
- * O estado de carregamento vem do provider (`loading`), não de um flag
- * local de montagem. Motivo: com Supabase, a lista chega de forma
- * assíncrona — um flag de "montou?" não saberia distinguir "ainda
- * carregando" de "carregou e está vazio", e o usuário veria o estado
- * vazio piscar antes da lista real.
+ * O estado de carregamento vem do provider (`loading`), não de um flag local
+ * de montagem. Motivo: a lista chega de forma assíncrona do Supabase — um
+ * flag de "montou?" não saberia distinguir "ainda carregando" de "carregou e
+ * está vazio", e o usuário veria o estado vazio piscar antes da lista real.
+ *
+ * Por construção, quem chega aqui está logado: sem sessão o provider fica
+ * vazio e a página redireciona para o login (ver `minha-lista/page.tsx` e
+ * `home-tabs.tsx`).
  */
 
 type Status = "want" | "watched";
 
 const COPY: Record<
   Status,
-  {
-    emptyTitle: string;
-    emptyGuest: string;
-    emptyUser: string;
-    icon: typeof Bookmark;
-  }
+  { emptyTitle: string; emptyDescription: string; icon: typeof Bookmark }
 > = {
   want: {
     emptyTitle: "Nada na lista de quero assistir",
-    emptyGuest:
-      "Toque no marcador em qualquer pôster para guardar o que você quer ver. Fica salvo neste navegador.",
-    emptyUser:
+    emptyDescription:
       "Toque no marcador em qualquer pôster para guardar o que você quer ver. Sua lista acompanha você em todos os dispositivos.",
     icon: Bookmark,
   },
   watched: {
     emptyTitle: "Você ainda não marcou nada como assistido",
-    emptyGuest:
-      "Toque no check em qualquer pôster para dizer que você já assistiu. Assim você evita reencontrar o que já viu.",
-    emptyUser:
-      "Toque no check em qualquer pôster para registrar o que você já assistiu. Fica sincronizado entre seus dispositivos.",
+    emptyDescription:
+      "Toque no check em qualquer pôster para registrar o que você já assistiu. Assim você evita reencontrar o que já viu.",
     icon: Check,
   },
 };
 
 export function LibraryView({ status }: { status: Status }) {
-  const {
-    entries,
-    counts,
-    clearStatus,
-    loading,
-    storage,
-    user,
-    error,
-    dismissError,
-  } = useLibrary();
+  const { entries, counts, clearStatus, loading, error, dismissError } =
+    useLibrary();
 
   const items = entries.filter((entry) => entry.status === status);
   const count = items.length;
@@ -98,18 +91,11 @@ export function LibraryView({ status }: { status: Status }) {
         <EmptyState
           icon={<Icon className="size-6" />}
           title={copy.emptyTitle}
-          description={user ? copy.emptyUser : copy.emptyGuest}
+          description={copy.emptyDescription}
           action={
-            <div className="flex flex-wrap gap-3">
-              <ButtonLink href="/descobrir" variant="outline" size="sm">
-                Explorar catálogo
-              </ButtonLink>
-              {!user && (
-                <ButtonLink href="/entrar" size="sm">
-                  Sincronizar entre dispositivos
-                </ButtonLink>
-              )}
-            </div>
+            <ButtonLink href="/descobrir" variant="outline" size="sm">
+              Explorar catálogo
+            </ButtonLink>
           }
         />
       ) : (
@@ -122,18 +108,10 @@ export function LibraryView({ status }: { status: Status }) {
 
               <span
                 className="label inline-flex items-center gap-1.5 text-paper-mute"
-                title={
-                  storage === "cloud"
-                    ? "Salvo na sua conta, disponível em qualquer dispositivo"
-                    : "Salvo apenas neste navegador"
-                }
+                title="Salvo na sua conta, disponível em qualquer dispositivo"
               >
-                {storage === "cloud" ? (
-                  <Cloud aria-hidden="true" className="size-3 text-terra" />
-                ) : (
-                  <HardDrive aria-hidden="true" className="size-3" />
-                )}
-                {storage === "cloud" ? "Sincronizado" : "Neste navegador"}
+                <Cloud aria-hidden="true" className="size-3 text-terra" />
+                Sincronizado
               </span>
             </div>
 
@@ -158,29 +136,11 @@ export function LibraryView({ status }: { status: Status }) {
           </div>
 
           <MediaGrid items={items} />
-
-          {storage === "local" && (
-            <div className="flex flex-col items-start gap-4 rounded-[3px] border border-line bg-ink-raised p-6 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <Eye
-                  aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-terra"
-                />
-                <p className="max-w-prose text-sm leading-relaxed text-paper-dim">
-                  Sua lista está salva apenas neste navegador. Entre com um
-                  e-mail para levar tudo com você em qualquer dispositivo.
-                </p>
-              </div>
-              <ButtonLink href="/entrar" size="sm" className="shrink-0">
-                Entrar
-              </ButtonLink>
-            </div>
-          )}
         </>
       )}
 
       {/* Ajuda de atalho quando o usuário tem as duas listas */}
-      {count > 0 && storage === "cloud" && counts.want + counts.watched > 0 && (
+      {count > 0 && counts.want + counts.watched > 0 && (
         <p className="text-xs text-paper-mute">
           Mover um título de lista? Abra os detalhes ou use os botões no
           pôster. Veja também{" "}

@@ -4,6 +4,7 @@ import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { LibraryProvider } from "@/lib/library/provider";
 import { getRegion } from "@/lib/region-server";
+import { getServerUser } from "@/lib/supabase/server";
 import "./globals.css";
 
 /**
@@ -71,6 +72,12 @@ export default async function RootLayout({
   // certa sem depender de hidratação (evita flash de país errado).
   const region = await getRegion();
 
+  // O id do usuário vem do servidor pelo mesmo motivo: quem entra ou sai o
+  // faz via Server Action, e o cliente só sabe disso pelo cookie. Passar o
+  // valor adiante é o que faz o header e as listas reagirem na hora, sem
+  // depender de um reload (ver o efeito `serverUserId` no provider).
+  const user = await getServerUser();
+
   return (
     <html
       lang="pt-BR"
@@ -88,7 +95,7 @@ export default async function RootLayout({
 
         {/* Provider no topo: o header mostra o contador da lista e
             qualquer card pode marcar um título como quero/assisti. */}
-        <LibraryProvider>
+        <LibraryProvider serverUserId={user?.id ?? null}>
           <Header region={region} />
 
           <main id="conteudo" className="flex-1">

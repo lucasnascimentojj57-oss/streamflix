@@ -86,8 +86,6 @@ function toRow(
 }
 
 export class SupabaseBackend implements LibraryBackend {
-  readonly kind = "cloud" as const;
-
   constructor(
     private readonly supabase: SupabaseClient,
     private readonly userId: string,
@@ -115,19 +113,6 @@ export class SupabaseBackend implements LibraryBackend {
       });
 
     if (error) throw new Error(`Falha ao salvar: ${error.message}`);
-  }
-
-  async addMany(entries: LibraryEntry[]): Promise<void> {
-    if (!entries.length) return;
-
-    const { error } = await this.supabase
-      .from("favorites")
-      .upsert(
-        entries.map((entry) => toRow(entry, this.userId)),
-        { onConflict: "user_id,tmdb_id,media_type", ignoreDuplicates: true },
-      );
-
-    if (error) throw new Error(`Falha ao migrar sua lista: ${error.message}`);
   }
 
   async remove(ref: MediaRef): Promise<void> {

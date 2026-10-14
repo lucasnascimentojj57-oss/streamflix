@@ -17,7 +17,13 @@ const INITIAL: AuthActionState = { status: "idle" };
  * cadastro já devolve sessão e o usuário entra direto (a action redireciona).
  * Se estiver ativada, mostramos o aviso de confirmação.
  */
-export function SignUpForm({ configured }: { configured: boolean }) {
+export function SignUpForm({
+  configured,
+  next,
+}: {
+  configured: boolean;
+  next?: string;
+}) {
   const [state, formAction, pending] = useActionState<AuthActionState, FormData>(
     signUp,
     INITIAL,
@@ -59,8 +65,13 @@ export function SignUpForm({ configured }: { configured: boolean }) {
       <h2 className="font-display text-xl text-paper">Criar conta</h2>
 
       <p className="mt-2 text-sm leading-relaxed text-paper-dim">
-        O que você já salvou neste navegador é migrado automaticamente.
+        Leva menos de um minuto. Suas listas passam a acompanhar você em
+        qualquer dispositivo.
       </p>
+
+      {/* Leva o destino adiante: quem veio de "/?aba=quero" volta para lá
+          depois de criar a conta, em vez de cair sempre em /minha-lista. */}
+      {next && <input type="hidden" name="next" value={next} />}
 
       <div className="mt-7 space-y-5">
         <FormField
@@ -125,7 +136,9 @@ export function SignUpForm({ configured }: { configured: boolean }) {
       <p className="mt-5 text-center text-xs text-paper-dim">
         Já tem conta?{" "}
         <Link
-          href="/entrar"
+          href={
+            next ? `/entrar?next=${encodeURIComponent(next)}` : "/entrar"
+          }
           className="text-terra underline underline-offset-4 hover:text-terra-soft"
         >
           Entrar

@@ -48,7 +48,7 @@ export function LibraryTabs({
   className,
 }: LibraryTabsProps) {
   const searchParams = useSearchParams();
-  const { counts, loading, user } = useLibrary();
+  const { counts, loading } = useLibrary();
 
   const tabs = variant === "home" ? HOME_TABS : LIBRARY_TABS;
 
@@ -113,17 +113,6 @@ export function LibraryTabs({
           </Link>
         );
       })}
-
-      {/* Dica de sincronização — só quando há contas disponíveis e o
-          usuário não está logado (a lista viveria só neste navegador). */}
-      {!user && !loading && counts.total > 0 && (
-        <Link
-          href="/entrar"
-          className="ml-auto hidden shrink-0 items-center gap-1.5 self-center pr-1 text-xs text-paper-mute transition-colors hover:text-terra sm:flex"
-        >
-          Sincronizar entre dispositivos →
-        </Link>
-      )}
     </div>
   );
 }

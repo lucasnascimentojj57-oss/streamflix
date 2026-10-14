@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { LibraryTabs } from "@/components/media/library-tabs";
 import { LibraryView } from "@/components/media/library-view";
+import { getServerUser } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Minha lista",
@@ -11,16 +13,24 @@ export const metadata: Metadata = {
 /**
  * Página da biblioteca pessoal.
  *
- * Server Component fino: lê a aba ativa da URL (fonte da verdade) e
- * delega a lista a um Client Component — os dados vivem no localStorage
- * ou no Supabase, ambos acessíveis só no cliente. Manter a página como
- * Server Component preserva `metadata` e o shell renderizado no servidor.
+ * A biblioteca exige conta, então verificamos a sessão AQUI, no servidor:
+ * quem não está logado é redirecionado para /entrar com `?next=/minha-lista`
+ * e volta para cá depois do login. Fazer isso no cliente causaria um flash
+ * da lista vazia antes do redirecionamento.
+ *
+ * `getServerUser()` valida o JWT contra o servidor de auth do Supabase —
+ * `getSession()` apenas leria o cookie, que pode ter sido forjado.
  */
 export default async function MinhaListaPage({
   searchParams,
 }: {
   searchParams: Promise<{ aba?: string }>;
 }) {
+  const user = await getServerUser();
+  if (!user) {
+    redirect(`/entrar?next=${encodeURIComponent("/minha-lista")}`);
+  }
+
   const { aba } = await searchParams;
 
   // "assistidos" é a segunda aba; qualquer outro valor cai em "quero".
@@ -33,8 +43,8 @@ export default async function MinhaListaPage({
         <p className="label mb-4 text-terra">Sua coleção</p>
         <h1 className="font-display text-display text-paper">Minha lista</h1>
         <p className="mt-4 max-w-prose text-[0.9375rem] leading-relaxed text-paper-dim">
-          Organize o que você quer ver e registre o que já viu. Sem conta, tudo
-          fica neste navegador; com conta, acompanha você em qualquer lugar.
+          Organize o que você quer ver e registre o que já viu. Fica salvo na
+          sua conta e acompanha você em qualquer dispositivo.
         </p>
       </header>
 
