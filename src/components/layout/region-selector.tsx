@@ -1,11 +1,11 @@
 "use client";
 
-import { Globe } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { REGIONS, type RegionCode } from "@/lib/region";
 import { useRegion } from "@/lib/use-region";
 import { cn } from "@/lib/utils";
+import { RegionFlag } from "./region-flag";
 
 /**
  * Seletor de região.
@@ -69,17 +69,17 @@ export function RegionSelector({ region }: { region: RegionCode }) {
         aria-haspopup="true"
         aria-label={`Região: ${active.label}. Trocar região.`}
         className={cn(
-          "label inline-flex h-10 items-center gap-1.5 rounded-[3px] px-2.5 transition-colors duration-200",
+          "label inline-flex h-10 items-center gap-2 rounded-[3px] px-2.5 transition-colors duration-200",
           open
             ? "bg-ink-raised text-paper"
             : "text-paper-dim hover:bg-ink-raised hover:text-paper",
         )}
       >
-        <Globe aria-hidden="true" className="size-[1.1rem] sm:hidden" />
-        <span aria-hidden="true" className="text-base leading-none">
-          {active.flag}
-        </span>
-        <span className="hidden sm:inline">{active.code}</span>
+        <RegionFlag
+          code={active.code}
+          className="h-3.5 w-5 shrink-0 rounded-[1px]"
+        />
+        {active.code}
       </button>
 
       {open && (
@@ -104,9 +104,10 @@ export function RegionSelector({ region }: { region: RegionCode }) {
                         : "text-paper-dim hover:bg-ink-raised hover:text-paper",
                     )}
                   >
-                    <span aria-hidden="true" className="text-base leading-none">
-                      {option.flag}
-                    </span>
+                    <RegionFlag
+                      code={option.code}
+                      className="h-3.5 w-5 shrink-0 rounded-[1px]"
+                    />
                     <span className="flex-1">{option.label}</span>
                     {selected && (
                       <span

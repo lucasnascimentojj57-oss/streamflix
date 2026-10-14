@@ -15,8 +15,8 @@
  */
 
 export const REGIONS = [
-  { code: "BR", label: "Brasil", flag: "🇧🇷" },
-  { code: "PT", label: "Portugal", flag: "🇵🇹" },
+  { code: "BR", label: "Brasil" },
+  { code: "PT", label: "Portugal" },
 ] as const;
 
 export type RegionCode = (typeof REGIONS)[number]["code"];
@@ -32,6 +32,3 @@ export const isRegionCode = (value: unknown): value is RegionCode =>
 
 export const regionLabel = (code: string) =>
   REGIONS.find((region) => region.code === code)?.label ?? code;
-
-export const regionFlag = (code: string) =>
-  REGIONS.find((region) => region.code === code)?.flag ?? "";
