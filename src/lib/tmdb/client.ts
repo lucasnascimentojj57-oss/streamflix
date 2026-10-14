@@ -44,10 +44,34 @@ export class TmdbError extends Error {
 export class TmdbConfigError extends Error {
   constructor() {
     super(
-      "TMDB_ACCESS_TOKEN não configurado. Copie .env.local.example para .env.local e preencha o token. Instruções no README.",
+      "TMDB não configurado. Preencha TMDB_ACCESS_TOKEN (token v4, recomendado) ou TMDB_API_KEY (chave v3) no .env.local. Instruções no README.",
     );
     this.name = "TmdbConfigError";
   }
+}
+
+/**
+ * Credenciais do TMDB — as duas formas que a API aceita.
+ *
+ * A API v3 aceita autenticação de duas maneiras:
+ *  1. **v4 (Bearer)** — `TMDB_ACCESS_TOKEN`, um JWT longo, enviado no header
+ *     `Authorization`. É a forma **recomendada**: o segredo viaja no header,
+ *     não na URL, então nunca aparece em logs de proxy, em histórico de
+ *     navegador nem em mensagens de erro.
+ *  2. **v3 (api_key)** — `TMDB_API_KEY`, 32 caracteres hexadecimais, enviada
+ *     como query string. Funciona, mas é menos segura pelo motivo acima.
+ *
+ * Aceitamos as duas porque quem clona o projeto às vezes já tem só uma delas
+ * em mãos. A v4 tem prioridade quando ambas existem.
+ */
+function getCredentials(): { bearer?: string; apiKey?: string } | null {
+  const bearer = process.env.TMDB_ACCESS_TOKEN?.trim();
+  if (bearer) return { bearer };
+
+  const apiKey = process.env.TMDB_API_KEY?.trim();
+  if (apiKey) return { apiKey };
+
+  return null;
 }
 
 /**
@@ -58,7 +82,11 @@ export class TmdbConfigError extends Error {
  * pessoa que clonasse o repositório sem ter uma conta no TMDB — o que
  * tornaria o projeto impossível de avaliar.
  */
-export const isTmdbConfigured = () => Boolean(process.env.TMDB_ACCESS_TOKEN);
+export const isTmdbConfigured = () =>
+  Boolean(
+    process.env.TMDB_ACCESS_TOKEN?.trim() ||
+      process.env.TMDB_API_KEY?.trim(),
+  );
 
 type QueryValue = string | number | boolean | null | undefined;
 
@@ -70,9 +98,16 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
-function buildUrl(path: string, params: Record<string, QueryValue> = {}) {
+function buildUrl(
+  path: string,
+  params: Record<string, QueryValue> = {},
+  apiKey?: string,
+) {
   const url = new URL(`${BASE_URL}${path}`);
   url.searchParams.set("language", LANGUAGE);
+
+  // Autenticação v3 vai na própria URL (é o único jeito que a v3 aceita).
+  if (apiKey) url.searchParams.set("api_key", apiKey);
 
   for (const [key, value] of Object.entries(params)) {
     // Descarta vazios para não poluir a URL (e a chave de cache).
@@ -85,20 +120,22 @@ function buildUrl(path: string, params: Record<string, QueryValue> = {}) {
 
 /**
  * Executa uma requisição ao TMDB.
- * Lança `TmdbError` em respostas não-OK e `TmdbConfigError` se faltar token.
+ * Lança `TmdbError` em respostas não-OK e `TmdbConfigError` se faltar credencial.
  */
 export async function tmdbFetch<T>(
   path: string,
   { params, revalidate = REVALIDATE.list, tags, signal }: RequestOptions = {},
 ): Promise<T> {
-  const token = process.env.TMDB_ACCESS_TOKEN;
-  if (!token) throw new TmdbConfigError();
+  const credentials = getCredentials();
+  if (!credentials) throw new TmdbConfigError();
 
-  const url = buildUrl(path, params);
+  const url = buildUrl(path, params, credentials.apiKey);
 
   const response = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...(credentials.bearer
+        ? { Authorization: `Bearer ${credentials.bearer}` }
+        : {}),
       Accept: "application/json",
     },
     next: { revalidate, tags },

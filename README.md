@@ -24,6 +24,10 @@ muda o catálogo e os serviços disponíveis; a interface continua em português
 
 > ⚠️ **Atenção:** use o **Read Access Token (v4)**, não a "API Key (v3)".
 > São campos diferentes na mesma página. O token v4 é o que começa com `eyJ`.
+>
+> Alternativa: se você só tem a chave v3 (32 caracteres hexadecimais), pode
+> usá-la em `TMDB_API_KEY` — o cliente aceita as duas formas. A v4 é preferível
+> porque o segredo viaja no header, não na URL (não vaza em logs nem histórico).
 
 ### 2. Configurar o projeto
 

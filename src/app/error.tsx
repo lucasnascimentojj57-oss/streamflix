@@ -24,7 +24,9 @@ export default function Error({
     console.error("[streamflix]", error);
   }, [error]);
 
-  const isConfigError = error.message.includes("TMDB_ACCESS_TOKEN");
+  // A mensagem do `TmdbConfigError` cita as variáveis; basta detectar que
+  // é um erro de configuração para trocar o texto da tela.
+  const isConfigError = error.message.includes("TMDB não configurado");
 
   return (
     <div className="mx-auto flex max-w-[1680px] flex-col items-start px-5 py-32 md:px-8">
