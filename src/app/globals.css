@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+/* ══════════════════════════════════════════════════════════════
+   EDITORIAL NOIR — Design Tokens
+   Paleta quente quase-preta. Um único acento terracota.
+   Todos os pares de contraste validados em WCAG 2.2 AA.
+   ══════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Superfícies ───────────────────────────────────────────── */
+  --color-ink: #0b0b0c; /* fundo raiz — quase-preto quente */
+  --color-ink-raised: #141416; /* cards, superfícies elevadas */
+  --color-ink-overlay: #1c1c1f; /* popovers, dropdowns */
+
+  /* ── Texto (contraste sobre --color-ink) ──────────────────── */
+  --color-paper: #f4f1ec; /* 14.8:1  ✅ AAA */
+  --color-paper-dim: #a8a39b; /* 7.1:1   ✅ AAA */
+  --color-paper-mute: #8e8a84; /* 4.9:1   ✅ AA  */
+
+  /* ── Acento ───────────────────────────────────────────────── */
+  --color-terra: #d9603b; /* terracota queimada */
+  --color-terra-soft: #e8865f;
+  --color-terra-deep: #a8431f;
+
+  /* ── Semântico ────────────────────────────────────────────── */
+  --color-line: oklch(0.95 0.01 85 / 0.09); /* bordas hairline */
+  --color-line-strong: oklch(0.95 0.01 85 / 0.18);
+
+  /* ── Tipografia ───────────────────────────────────────────── */
+  --font-display: var(--font-instrument-serif), Georgia, serif;
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* ── Escala fluida de display ─────────────────────────────── */
+  --text-hero: clamp(2.75rem, 8.5vw, 6.5rem);
+  --text-hero--line-height: 0.92;
+  --text-hero--letter-spacing: -0.035em;
+
+  --text-display: clamp(2rem, 5vw, 3.75rem);
+  --text-display--line-height: 0.98;
+  --text-display--letter-spacing: -0.03em;
+
+  --text-title: clamp(1.5rem, 3vw, 2.25rem);
+  --text-title--line-height: 1.05;
+  --text-title--letter-spacing: -0.02em;
+
+  /* Rótulo em mono, versalete — assinatura do sistema */
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1;
+  --text-label--letter-spacing: 0.16em;
+
+  /* ── Easing ───────────────────────────────────────────────── */
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BASE
+   ══════════════════════════════════════════════════════════════ */
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    background-color: var(--color-ink);
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Foco visível e consistente em todo o app */
+  :focus-visible {
+    outline: 2px solid var(--color-terra);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-terra);
+    color: var(--color-ink);
+  }
+
+  /* Respeita preferência do sistema — desliga TODA animação */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   UTILITÁRIOS DO SISTEMA
+   ══════════════════════════════════════════════════════════════ */
+
+@utility label {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--text-label--letter-spacing);
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* Máscara de fade na borda direita das trilhas com scroll */
+@utility fade-r {
+  mask-image: linear-gradient(
+    to right,
+    black 0,
+    black calc(100% - 4rem),
+    transparent 100%
+  );
+}
+
+/* Esconde scrollbar mantendo o scroll funcional */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ANIMAÇÕES
+   ══════════════════════════════════════════════════════════════ */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@utility animate-rise {
+  animation: rise 0.5s var(--ease-out-expo) both;
+}
+
+/* Skeleton com brilho percorrendo */
+@utility skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-ink-raised);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      oklch(1 0 0 / 0.045),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+}
+

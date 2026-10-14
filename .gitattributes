@@ -1,0 +1,20 @@
+# Normaliza o fim de linha no repositório.
+#
+# Sem isto, o Git no Windows grava CRLF em tudo e o projeto passa a
+# aparecer como "modificado" para quem usa Linux/macOS — centenas de
+# mudanças fantasma no primeiro diff de outra pessoa.
+* text=auto
+
+# Arquivos que NÃO devem ser normalizados (o Git detectaria sozinho, mas
+# deixar explícito evita corrupção se algum dia um deles parecer texto).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+
+# O lockfile é gerado; não faz sentido marcar conflito nele.
+package-lock.json -diff linguist-generated=true
